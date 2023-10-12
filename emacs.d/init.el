@@ -85,7 +85,23 @@ remote host machine."
   (defun jump-to-mark-and-center (arg)
     (interactive "*p")
     (goto-char (mark))
-    (recenter)))
+    (recenter))
+
+  (defvar *kb-layout* :qwerty)
+
+  (defun toggle-kb-layout ()
+    (interactive)
+    (if (eq *kb-layout* :qwerty)
+        (progn
+          (message "Keybindings set for DVORAK")
+          (define-key key-translation-map [?\C-x] [?\C-u])
+          (define-key key-translation-map [?\C-u] [?\C-x])
+          (setq *kb-layout* :dvorak))
+      (progn
+        (message "Keybindings set for QWERTY")
+        (define-key key-translation-map [?\C-x] [?\C-x])
+        (define-key key-translation-map [?\C-u] [?\C-u])
+        (setq *kb-layout* :qwerty)))))
 
 ;;; Keybindings outside packages
 
@@ -177,7 +193,8 @@ remote host machine."
 	         (indent-tabs-mode . nil)
 	         (c-offsets-alist . ((arglist-intro . ++)
 				     (innamespace . 0)
-				     (member-init-intro . llvm-lineup-statement)))))
+				     (member-init-intro
+                                      . llvm-lineup-statement)))))
 
   (setq c-default-style '((java-mode . "java")
                           (awk-mode . "awk")
@@ -429,19 +446,23 @@ remote host machine."
   (initial-major-mode 'fundamental-mode))
 
 (use-package time
+  :custom
+  (display-time-24hr-format t)
   :init
   (display-time-mode))
 
 (use-package windmove
-  :init
-  (windmove-default-keybindings))
+  :bind (("M-h" . windmove-left))
+         ("M-l" . windmove-right)
+         ("M-j" . windmove-down)
+         ("M-k" . windmove-up))
 
 (use-package window
   :bind (("M-o" . window-swap-states)
-         ("M-S-<left>" . shrink-window-horizontally)
-         ("M-S-<right>" . enlarge-window-horizontally)
-         ("M-S-<down>" . shrink-window)
-         ("M-S-<up>" . enlarge-window)))
+         ("M-H" . (lambda () (interactive) (shrink-window-horizontally 5)))
+         ("M-L" . (lambda () (interactive) (enlarge-window-horizontally 5)))
+         ("M-J" . (lambda () (interactive) (shrink-window 5)))
+         ("M-K" . (lambda () (interactive) (enlarge-window 5)))))
 
 ;;; Local
 
@@ -479,10 +500,6 @@ remote host machine."
 
 (use-package cmake-mode
   :ensure t)
-
-(use-package corfu
-  :ensure t
-  :hook ((prog-mode sly-mrepl-mode) . corfu-mode))
 
 (use-package dockerfile-mode
   :ensure t)
@@ -535,6 +552,8 @@ remote host machine."
 (use-package paredit
   :diminish
   :ensure t
+  :bind (:map paredit-mode-map
+              ("M-J"))
   :hook ((emacs-lisp-mode lisp-mode sly-mrepl-mode)
          . paredit-mode)
   :config
@@ -550,7 +569,6 @@ remote host machine."
   :bind (:map sly-mode-map
               ("C-c C-q" . sly-mrepl-sync))
   :custom
-  (sly-common-lisp-style "modern")
   (sly-kill-without-query-p t)
   (sly-symbol-completion-mode nil)
   :init
@@ -592,7 +610,9 @@ module."
          ("C-c 2" . (lambda () (interactive) (tok/vterm 2)))
          ("C-c 3" . (lambda () (interactive) (tok/vterm 3)))
          (:map vterm-mode-map
-               ("C-h" . vterm-send-backspace))))
+               ("C-h" . vterm-send-backspace)))
+  :init
+  (tok/vterm 1))
 
 (use-package yasnippet
   :ensure t

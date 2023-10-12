@@ -25,8 +25,12 @@ else # OS X `ls`
     colorflag="-G"
 fi
 
-# LSCOLORS for dark background.
-export LSCOLORS=gxfxcxdxbxegedabagacad
+# This will be set in Emacs, otherwise use the default colorings offered by
+# terminal.
+if [[ ! -z "$TOK_DARK_THEME" ]]; then
+  # LSCOLORS for dark background.
+  export LSCOLORS=gxfxcxdxbxegedabagacad
+fi
 
 alias l="ls -lhF ${colorflag}"
 alias la="ls -lahF ${colorflag}"
