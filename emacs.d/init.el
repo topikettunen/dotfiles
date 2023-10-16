@@ -16,22 +16,10 @@
   (defun tok/emacs-path (path)
     (expand-file-name path user-emacs-directory))
 
-  (defun cfg ()
-    (interactive)
-    (find-file (tok/emacs-path "init.el")))
-
-  (defun sudo (&optional path)
-    "Reopen `path' (or current file) with root privileges."
-    (interactive)
-    (find-alternate-file
-     (concat "/sudo:root@localhost:" (or path buffer-file-name))))
-
-  (defun remote-sudo (host path)
-    "Reopen `path' (or current file) with root privileges in the
-remote host machine."
-    (interactive "sHostname: \nsRemote find file (sudo): ")
-    (find-alternate-file
-     (format "/ssh:tok@%s|sudo::%s" host path)))
+  (defun tok/org-path (path)
+    (expand-file-name path (if (string= system-type "darwin")
+                               "~/Documents/org/"
+                             "~/org/")))
 
   (defun lookup-password (host user port)
     (require 'auth-source)
@@ -45,70 +33,24 @@ remote host machine."
                      user host port)))
         (error "No auth entry found for %s@%s:%s" user host port))))
 
-  (defun duplicate-line (arg)
-    "Duplicate current line, leaving point in lower line."
-    (interactive "*p")
-    ;; Save the point for undo.
-    (setq buffer-undo-list (cons (point) buffer-undo-list))
-    ;; Local variables for start and end of line.
-    (let ((bol (save-excursion (beginning-of-line) (point)))
-          eol)
-      (save-excursion
-        ;; Don't use forward-line for this, because you would have to
-        ;; check whether you are at the end of the buffer.
-        (end-of-line)
-        (setq eol (point))
-        ;; Store the line and disable the recording of undo
-        ;; information.
-        (let ((line (buffer-substring bol eol))
-              (buffer-undo-list t)
-              (count arg))
-          ;; Insert the line arg times.
-          (while (> count 0)
-            (newline) ; Because there is no newline in `line'.
-            (insert line)
-            (setq count (1- count))))
-        ;; Create the undo information.
-        (setq buffer-undo-list (cons (cons eol (point)) buffer-undo-list))))
-    ;; Put the point in the lowest line and return.
-    (next-line arg))
 
-  (defun logical-cores ()
-    "Print the number of processing units available."
-    (string-trim-right
-     (shell-command-to-string
-      (if (or (string-equal system-type "darwin")
-              (string-equal system-type "berkley-unix"))
-          "sysctl -n hw.logicalcpu"
-        "nproc"))))
+  (defvar saved-window-configuration nil)
 
-  (defun jump-to-mark-and-center (arg)
-    (interactive "*p")
-    (goto-char (mark))
-    (recenter))
-
-  (defvar *kb-layout* :qwerty)
-
-  (defun toggle-kb-layout ()
+  (defun push-window-configuration ()
     (interactive)
-    (if (eq *kb-layout* :qwerty)
-        (progn
-          (message "Keybindings set for DVORAK")
-          (define-key key-translation-map [?\C-x] [?\C-u])
-          (define-key key-translation-map [?\C-u] [?\C-x])
-          (setq *kb-layout* :dvorak))
-      (progn
-        (message "Keybindings set for QWERTY")
-        (define-key key-translation-map [?\C-x] [?\C-x])
-        (define-key key-translation-map [?\C-u] [?\C-u])
-        (setq *kb-layout* :qwerty)))))
+    (push (current-window-configuration) saved-window-configuration))
+
+  (defun pop-window-configuration ()
+    (interactive)
+    (let ((config (pop saved-window-configuration)))
+      (if config
+          (set-window-configuration config)
+        (if (> (length (window-list)) 1)
+            (delete-window)
+          (bury-buffer))))))
 
 ;;; Keybindings outside packages
 
-(global-set-key (kbd "C-c C-d") 'duplicate-line)
-(global-set-key (kbd "<f3>") 'sudo)
-(global-set-key (kbd "C-x C-x") 'jump-to-mark-and-center)
-(global-set-key (kbd "<C-M-return>") 'toggle-frame-fullscreen)
 
 ;;; Packages
 
@@ -266,7 +208,7 @@ remote host machine."
   (eldoc-echo-area-display-truncation-message nil))
 
 (use-package emacs
-  :bind (("C-z" . nil))
+  :bind (("C-z"))
   :custom
   (auto-hscroll-mode 'current-line)
   (column-number-mode t)
@@ -282,7 +224,6 @@ remote host machine."
   (ns-right-alternate-modifier 'none)
   (process-adaptive-read-buffering nil)
   (ring-bell-function 'ignore)
-  (scroll-conservatively 101)
   (size-indication-mode t)
   (tab-always-indent 'complete)
   (user-full-name "Topi Kettunen")
@@ -320,6 +261,10 @@ remote host machine."
   (erc-track-exclude-types '("JOIN" "MODE" "NICK" "PART" "QUIT"
                              "324" "329" "332" "333" "353" "477"))
   :preface
+  (defun setup-irc-env ()
+    (setq-local scroll-conservatively 101
+                line-spacing 4))
+
   (defun irc (&optional arg)
     (interactive "P")
     (let ((server "irc.libera.chat")
@@ -333,6 +278,7 @@ remote host machine."
     (erc-modified-channels-update)
     (erc-modified-channels-display)
     (force-mode-line-update))
+  :hook (erc-mode . setup-irc-env)
   :config
   (erc-track-minor-mode 1)
   (erc-track-mode 1))
@@ -384,7 +330,9 @@ remote host machine."
 (use-package help
   :bind (("<f1>" . help)
          (:map help-map
-	       ("F" . describe-face))))
+	       ("F" . describe-face)))
+  :init
+  (temp-buffer-resize-mode))
 
 (use-package ibuffer
   :bind ("C-x C-b" . ibuffer))
@@ -403,8 +351,14 @@ remote host machine."
 (use-package js
   :custom
   (js-indent-level 2)
-  ;; `js-json-mode' added in Emacs 29.
-  :mode ("\\.json\\'" . js-json-mode))
+  :config
+  (add-to-list 'auto-mode-alist
+               `("\\.json\\'" . ,(if (>= emacs-major-version 29)
+                                     js-json-mode
+                                   js-mode))))
+
+(use-package kmacro
+  :bind ("C-x C-k C-k"))
 
 (use-package lisp-mode
   :hook ((emacs-lisp-mode lisp-mode)
@@ -417,6 +371,93 @@ remote host machine."
 (use-package novice
   :custom
   (disabled-command-function nil t))
+
+(use-package org
+  :bind (("M-C" . jump-to-org-agenda-dashboard)
+         ("C-c a" . org-agenda)
+         ("M-m" . org-capture))
+  :custom
+  (org-agenda-custom-commands
+   `(("d" "Dashboard"
+      ((agenda "")
+       (todo ""
+             ((org-agenda-overriding-header "Unscheduled TODO")
+              (org-agenda-skip-function '(org-agenda-skip-entry-if 'scheduled))))
+       (tags "daily"
+             ((org-agenda-overriding-header "Daily habits")
+              (org-agenda-files
+               '(,(tok/org-path "habits.org")))))
+       (tags "weekly"
+             ((org-agenda-overriding-header "Weekly habits")
+              (org-agenda-files
+               '(,(tok/org-path "habits.org")))))))))
+  (org-agenda-files `(,(tok/org-path "todo.org")
+                      ,(tok/emacs-path "lunar.org")))
+  (org-agenda-span 'week)
+  (org-agenda-start-on-weekday nil)
+  (org-agenda-inhibit-startup t)
+  (org-capture-templates
+   `(("t" "Add task" entry
+      (file+headline ,(tok/org-path "todo.org") "Inbox")
+      "* TODO %?")))
+  (org-fast-tag-selection-single-key 'expert)
+  (org-todo-keywords '((sequence "TODO(t)" "WAITING(w)" "|" "DONE(d)" "CANCELLED(c)")))
+  :preface
+  (defun jump-to-org-agenda-dashboard ()
+    (interactive)
+    (push-window-configuration)
+    (cl-flet ((prep-window (wind)
+                (with-selected-window wind
+                  (org-fit-window-to-buffer wind)
+                  (ignore-errors
+                    (window-resize
+                     wind
+                     (- 100 (window-width wind)) t)))))
+      (let ((buf (or (get-buffer "*Org Agenda*")
+                     (get-buffer "*Org Agenda(a)*"))))
+        (if buf
+            (let ((win (get-buffer-window buf)))
+              (if win
+                  (when (called-interactively-p 'any)
+                    (funcall #'prep-window win))
+                (if (called-interactively-p 'any)
+                    (funcall #'prep-window (display-buffer buf t t))
+                  (funcall #'prep-window (display-buffer buf)))))
+          (org-agenda nil "d")
+          (funcall #'prep-window (selected-window))))))
+
+  (defun org-lunar-phases ()
+    "Show lunar phase in Agenda buffer."
+    (require 'lunar)
+    (let* ((phase-list (lunar-phase-list (nth 0 date) (nth 2 date)))
+           (phase (cl-find-if (lambda (phase) (equal (car phase) date))
+                              phase-list))
+           (lunar-phase-names '("● New Moon"
+                                "☽ First Quarter Moon"
+                                "○ Full Moon"
+                                "☾ Last Quarter Moon")))
+      (when phase
+        ;; Return the phase to the agenda file.
+        (setq ret (concat (lunar-phase-name (nth 2 phase)))))))
+
+  (defun todo ()
+    (interactive)
+    (find-file (tok/org-path "todo.org")))
+
+  (defun habits ()
+    (interactive)
+    (find-file (tok/org-path "habits.org")))
+
+  (defun org-archive-done-tasks ()
+    (interactive)
+    (org-map-entries
+     (lambda ()
+       (org-archive-subtree)
+       (setq org-map-continue-from (org-element-property :begin (org-element-at-point))))
+     "/DONE" 'file)
+    (org-save-all-org-buffers))
+  :init
+  (add-hook 'emacs-startup-hook #'jump-to-org-agenda-dashboard t))
 
 (use-package paragraphs
   :custom
@@ -470,6 +511,22 @@ remote host machine."
   :demand t
   :load-path "lisp/")
 
+(use-package personal
+  :demand t
+  :load-path "lisp/"
+  :bind (("C-c C-d" . duplicate-line)
+         ("<f3>" . sudo)
+         ("C-x C-x" . exchange-point-and-mark)
+         ("<C-M-return>" . toggle-frame-fullscreen)
+         ("C-x K" . delete-current-buffer-file)
+         ("C-x R" . rename-current-buffer-file)
+         ("C-c M-q" . unfill-paragraph)
+         ("M-L" . mark-line)))
+
+(use-package theme-dump
+  :demand t
+  :load-path "lisp/")
+
 (use-package tok-hugo
   :demand t
   :load-path "lisp/"
@@ -488,12 +545,28 @@ remote host machine."
 
   (defun toggle-theme ()
     (interactive)
+    (if tok-theme-dark
+        (setenv "TOK_DARK_THEME")
+      (setenv "TOK_DARK_THEME" "1"))
     (setq tok-theme-dark (if tok-theme-dark nil t))
+    (load-theme 'tok t))
+
+  (defun tok/apply-theme (appearance)
+    "Load theme, taking current system APPEARANCE into consideration."
+    (mapc #'disable-theme custom-enabled-themes)
+    (pcase appearance
+      ('light (progn
+                (setenv "TOK_DARK_THEME")
+                (setq tok-theme-dark nil)))
+      ('dark (progn
+               (setenv "TOK_DARK_THEME" "1")
+               (setq tok-theme-dark t))))
     (load-theme 'tok t))
   :bind (("C-<f12>" . reload-theme)
          ("<f12>" . toggle-theme))
   :init
   (add-to-list 'custom-theme-load-path "~/.emacs.d/themes/tok-theme")
+  (add-hook 'ns-system-appearance-change-functions #'tok/apply-theme)
   (load-theme 'tok t))
 
 ;;; Third-party
@@ -610,9 +683,7 @@ module."
          ("C-c 2" . (lambda () (interactive) (tok/vterm 2)))
          ("C-c 3" . (lambda () (interactive) (tok/vterm 3)))
          (:map vterm-mode-map
-               ("C-h" . vterm-send-backspace)))
-  :init
-  (tok/vterm 1))
+               ("C-h" . vterm-send-backspace))))
 
 (use-package yasnippet
   :ensure t
