@@ -542,6 +542,10 @@
 (use-package cmake-mode
   :ensure t)
 
+(use-package corfu
+  :ensure t
+  :hook ((prog-mode sly-mrepl-mode) . corfu-mode))
+
 (use-package dockerfile-mode
   :ensure t)
 
