@@ -46,22 +46,6 @@ remote host machine."
         "sysctl -n hw.logicalcpu"
       "nproc"))))
 
-(defvar *kb-layout* :qwerty)
-
-(defun toggle-kb-layout ()
-  (interactive)
-  (if (eq *kb-layout* :qwerty)
-      (progn
-        (message "Keybindings set for DVORAK")
-        (define-key key-translation-map [?\C-x] [?\C-u])
-        (define-key key-translation-map [?\C-u] [?\C-x])
-        (setq *kb-layout* :dvorak))
-    (progn
-      (message "Keybindings set for QWERTY")
-      (define-key key-translation-map [?\C-x] [?\C-x])
-      (define-key key-translation-map [?\C-u] [?\C-u])
-      (setq *kb-layout* :qwerty))))
-
 (defun rename-current-buffer-file ()
   "Renames the current buffer and the file it is visiting."
   (interactive)
@@ -97,4 +81,9 @@ remote host machine."
   (let ((fill-column (point-max)))
     (fill-paragraph nil t)))
 
-(provide 'personal)
+(defun jump-to-mark-and-recenter (&optional arg)
+  (interactive "*p")
+  (goto-char (mark))
+  (recenter))
+
+(provide 'tok)

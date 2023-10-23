@@ -27,10 +27,6 @@
 (when (>= emacs-major-version 29)
   (push '(undecorated-round . t) default-frame-alist))
 
-;; Don't blind me, if I'm in dark mode when opening Emacs.
-(when (eq ns-system-appearance 'dark)
-  (push '(background-color . "black") default-frame-alist))
-
 ;; `file-name-handler-alist' is consulted on each call to `require', `load',
 ;;  or various file/io functions (like `expand-file-name' or `file-remote-p').
 ;;  You get a noteable boost to startup time by unsetting or simplifying its
@@ -44,7 +40,7 @@
 (setq frame-inhibit-implied-resize t
       frame-resize-pixelwise t)
 
-(set-face-attribute 'default nil :height 160)
+(set-face-attribute 'default nil :family "SF Mono" :height 160)
 
 ;; Small margin to left so text don't need to start right next to screen's
 ;; edge.

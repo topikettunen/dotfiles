@@ -31,26 +31,7 @@
                 (funcall secretf)
               (error "Auth entry for %s@%s:%s has no secret!"
                      user host port)))
-        (error "No auth entry found for %s@%s:%s" user host port))))
-
-
-  (defvar saved-window-configuration nil)
-
-  (defun push-window-configuration ()
-    (interactive)
-    (push (current-window-configuration) saved-window-configuration))
-
-  (defun pop-window-configuration ()
-    (interactive)
-    (let ((config (pop saved-window-configuration)))
-      (if config
-          (set-window-configuration config)
-        (if (> (length (window-list)) 1)
-            (delete-window)
-          (bury-buffer))))))
-
-;;; Keybindings outside packages
-
+        (error "No auth entry found for %s@%s:%s" user host port)))))
 
 ;;; Packages
 
@@ -241,11 +222,13 @@
   (erc-autojoin-channels-alist '(("libera.chat"
                                   "#c"
                                   "#C++"
-                                  "#emacs"
-                                  "#go-nuts"
+                                  "#commonlisp"
+                                  "#freebsd"
                                   "#lisp"
                                   "#lispcafe"
-                                  "#sbcl")))
+                                  "#networking"
+                                  "#sbcl"
+                                  "#security")))
   (erc-timestamp-only-if-changed-flag nil)
   (erc-timestamp-format "[%H:%M] ")
   (erc-fill-prefix "          ")
@@ -373,73 +356,22 @@
   (disabled-command-function nil t))
 
 (use-package org
-  :bind (("M-C" . jump-to-org-agenda-dashboard)
-         ("C-c a" . org-agenda)
-         ("M-m" . org-capture))
+  :bind (("M-m" . org-capture))
   :custom
-  (org-agenda-custom-commands
-   `(("d" "Dashboard"
-      ((agenda "")
-       (todo ""
-             ((org-agenda-overriding-header "Unscheduled TODO")
-              (org-agenda-skip-function '(org-agenda-skip-entry-if 'scheduled))))
-       (tags "daily"
-             ((org-agenda-overriding-header "Daily habits")
-              (org-agenda-files
-               '(,(tok/org-path "habits.org")))))
-       (tags "weekly"
-             ((org-agenda-overriding-header "Weekly habits")
-              (org-agenda-files
-               '(,(tok/org-path "habits.org")))))))))
-  (org-agenda-files `(,(tok/org-path "todo.org")
-                      ,(tok/emacs-path "lunar.org")))
-  (org-agenda-span 'week)
-  (org-agenda-start-on-weekday nil)
-  (org-agenda-inhibit-startup t)
   (org-capture-templates
    `(("t" "Add task" entry
       (file+headline ,(tok/org-path "todo.org") "Inbox")
-      "* TODO %?")))
+      "* TODO %?")
+     ("h" "Add habit" entry
+      (file+headline ,(tok/org-path "habits.org") "Habits")
+      "* TODO %?
+:PROPERTIES:
+:STYLE: habit
+:END:" :prepend t)))
   (org-fast-tag-selection-single-key 'expert)
+  (org-log-into-drawer t)
   (org-todo-keywords '((sequence "TODO(t)" "WAITING(w)" "|" "DONE(d)" "CANCELLED(c)")))
   :preface
-  (defun jump-to-org-agenda-dashboard ()
-    (interactive)
-    (push-window-configuration)
-    (cl-flet ((prep-window (wind)
-                (with-selected-window wind
-                  (org-fit-window-to-buffer wind)
-                  (ignore-errors
-                    (window-resize
-                     wind
-                     (- 100 (window-width wind)) t)))))
-      (let ((buf (or (get-buffer "*Org Agenda*")
-                     (get-buffer "*Org Agenda(a)*"))))
-        (if buf
-            (let ((win (get-buffer-window buf)))
-              (if win
-                  (when (called-interactively-p 'any)
-                    (funcall #'prep-window win))
-                (if (called-interactively-p 'any)
-                    (funcall #'prep-window (display-buffer buf t t))
-                  (funcall #'prep-window (display-buffer buf)))))
-          (org-agenda nil "d")
-          (funcall #'prep-window (selected-window))))))
-
-  (defun org-lunar-phases ()
-    "Show lunar phase in Agenda buffer."
-    (require 'lunar)
-    (let* ((phase-list (lunar-phase-list (nth 0 date) (nth 2 date)))
-           (phase (cl-find-if (lambda (phase) (equal (car phase) date))
-                              phase-list))
-           (lunar-phase-names '("● New Moon"
-                                "☽ First Quarter Moon"
-                                "○ Full Moon"
-                                "☾ Last Quarter Moon")))
-      (when phase
-        ;; Return the phase to the agenda file.
-        (setq ret (concat (lunar-phase-name (nth 2 phase)))))))
-
   (defun todo ()
     (interactive)
     (find-file (tok/org-path "todo.org")))
@@ -456,6 +388,47 @@
        (setq org-map-continue-from (org-element-property :begin (org-element-at-point))))
      "/DONE" 'file)
     (org-save-all-org-buffers))
+  :config
+  (add-to-list 'org-modules 'org-habit t))
+
+(use-package org-agenda
+  :bind (("M-C" . jump-to-org-agenda-dashboard)
+         ("C-c a" . org-agenda))
+  :custom
+  (org-agenda-custom-commands
+   `(("d" "Dashboard"
+      ((agenda "")
+       (todo ""
+             ((org-agenda-overriding-header "Unscheduled TODO")
+              (org-agenda-skip-function '(org-agenda-skip-entry-if 'scheduled))))
+       (agenda ""
+             ((org-agenda-span 'day)
+              (org-agenda-overriding-header "Habit tracker")
+              (org-agenda-files
+               '(,(tok/org-path "habits.org")))))))))
+  (org-agenda-files `(,(tok/org-path "todo.org")
+                      ,(tok/emacs-path "lunar.org")))
+  (org-agenda-span 'week)
+  (org-agenda-start-on-weekday nil)
+  (org-agenda-inhibit-startup t)
+  :preface
+  (defun jump-to-org-agenda-dashboard ()
+    (interactive)
+    (org-agenda nil "d"))
+
+  (defun org-lunar-phases ()
+    "Show lunar phase in Agenda buffer."
+    (require 'lunar)
+    (let* ((phase-list (lunar-phase-list (nth 0 date) (nth 2 date)))
+           (phase (cl-find-if (lambda (phase) (equal (car phase) date))
+                              phase-list))
+           (lunar-phase-names '("● New Moon"
+                                "☽ First Quarter Moon"
+                                "○ Full Moon"
+                                "☾ Last Quarter Moon")))
+      (when phase
+        ;; Return the phase to the agenda file.
+        (setq ret (concat (lunar-phase-name (nth 2 phase)))))))
   :init
   (add-hook 'emacs-startup-hook #'jump-to-org-agenda-dashboard t))
 
@@ -511,21 +484,16 @@
   :demand t
   :load-path "lisp/")
 
-(use-package personal
+(use-package tok
   :demand t
   :load-path "lisp/"
   :bind (("C-c C-d" . duplicate-line)
          ("<f3>" . sudo)
-         ("C-x C-x" . exchange-point-and-mark)
+         ("C-x C-x" . jump-to-mark-and-recenter)
          ("<C-M-return>" . toggle-frame-fullscreen)
          ("C-x K" . delete-current-buffer-file)
          ("C-x R" . rename-current-buffer-file)
-         ("C-c M-q" . unfill-paragraph)
-         ("M-L" . mark-line)))
-
-(use-package theme-dump
-  :demand t
-  :load-path "lisp/")
+         ("C-c M-q" . unfill-paragraph)))
 
 (use-package tok-hugo
   :demand t
