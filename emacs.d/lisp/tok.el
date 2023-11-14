@@ -71,7 +71,7 @@ remote host machine."
         (name (buffer-name)))
     (if (not (and filename (file-exists-p filename)))
         (kill-buffer buffer)
-      (when (yes-or-no-p "Are you sure this file should be removed? ")
+      (when (y-or-n-p "Are you sure this file should be removed? ")
         (delete-file filename)
         (kill-buffer buffer)
         (message "File '%s' successfully removed" filename)))))
@@ -85,5 +85,32 @@ remote host machine."
   (interactive "*p")
   (goto-char (mark))
   (recenter))
+
+(defvar *tok-dark-theme* nil)
+
+(defun toggle-theme ()
+  (interactive)
+  (if *tok-dark-theme*
+      (setenv "TOK_DARK_THEME")
+    (setenv "TOK_DARK_THEME" "1"))
+  (set-background-color (if *tok-dark-theme* "white" "black"))
+  (set-foreground-color (if *tok-dark-theme* "black" "white"))
+  (setq *tok-dark-theme* (not *tok-dark-theme*)))
+
+(defun tok/load-theme (appearance)
+  "Load theme, taking current system APPEARANCE into consideration."
+  (mapc #'disable-theme custom-enabled-themes)
+  (pcase appearance
+    ('light (progn
+              (setenv "TOK_DARK_THEME")
+              (set-background-color "white")
+              (set-foreground-color "black")))
+    ('dark (progn
+             (setenv "TOK_DARK_THEME" "1")
+             (set-background-color "black")
+             (set-foreground-color "white"))))
+  (setq *tok-dark-theme* (not *tok-dark-theme*)))
+
+(add-hook 'ns-system-appearance-change-functions #'tok/load-theme)
 
 (provide 'tok)

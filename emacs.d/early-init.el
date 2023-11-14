@@ -45,3 +45,7 @@
 ;; Small margin to left so text don't need to start right next to screen's
 ;; edge.
 (setq-default left-margin-width 1)
+
+;; Disable global font-lock. Enabled in certain modes where I prefer some
+;; coloring, e.g. magit.
+(global-font-lock-mode -1)

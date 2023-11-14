@@ -10,6 +10,10 @@
 ;; Garbage collect after startup is done.
 (add-hook 'after-init-hook #'garbage-collect t)
 
+;; By default, Emacs has this ugly fringe when using margins, so disable
+;; those.
+(set-face-attribute 'fringe nil :background nil)
+
 ;;; Functions
 
 (eval-and-compile
@@ -17,9 +21,7 @@
     (expand-file-name path user-emacs-directory))
 
   (defun tok/org-path (path)
-    (expand-file-name path (if (string= system-type "darwin")
-                               "~/Documents/org/"
-                             "~/org/")))
+    (expand-file-name path "~/docs/"))
 
   (defun lookup-password (host user port)
     (require 'auth-source)
@@ -158,14 +160,20 @@
               ("^" . (lambda () (interactive) (find-alternate-file "..")))))
 
 (use-package eglot
-  :commands eglot
-  :hook ((c-mode c++-mode go-mode) . eglot-ensure)
+  ;; gopls starts super slow with EGLOT-ENSURE for some reason, no issues when
+  ;; starting it manually.
+  ;;
+  ;; :hook (go-mode . eglot-ensure)
+  ;;
+  :hook ((c-mode c++-mode) . eglot-ensure)
   :custom
   (eglot-autoshutdown t)
   (eglot-ignored-server-capabilities '(:documentOnTypeFormattingProvider
                                        :hoverProvider
                                        :inlayHintProvider))
   (eglot-workspace-configuration '((:gopls . ((staticcheck . t)))))
+  :custom-face
+  (eglot-mode-line ((t (:inherit nil :weight bold))))
   :config
   (setq read-process-output-max (* 1024 1024))
 
@@ -177,13 +185,9 @@
                             (remove #'flymake-eldoc-function
                                     eldoc-documentation-functions))))))
 
-(use-package elec-pair
-  :init
-  (electric-pair-mode))
-
 (use-package eldoc
   :diminish
-  :hook ((c-mode-common go-mode) . eldoc-mode)
+  :hook ((c-mode-common go-mode lisp-mode emacs-lisp-mode) . eldoc-mode)
   :custom
   (eldoc-echo-area-use-multiline-p 3)
   (eldoc-echo-area-display-truncation-message nil))
@@ -205,6 +209,7 @@
   (ns-right-alternate-modifier 'none)
   (process-adaptive-read-buffering nil)
   (ring-bell-function 'ignore)
+  (scroll-conservatively 101)
   (size-indication-mode t)
   (tab-always-indent 'complete)
   (user-full-name "Topi Kettunen")
@@ -270,6 +275,9 @@
   :custom
   (flymake-mode-line-format
    '(" " flymake-mode-line-exception flymake-mode-line-counters))
+  :custom-face
+  (flymake-error-echo ((t (:foreground "red"))))
+  (flymake-warning-echo ((t (:foreground "orange"))))
   :bind (:map flymake-mode-map
               ("M-n" . flymake-goto-next-error)
               ("M-p" . flymake-goto-prev-error)))
@@ -296,7 +304,7 @@
   (defadvice find-file (around find-file-line-number
                                (filename &optional wildcards)
                                activate)
-    "Turn files like file.cpp:14 into file.cpp and going to the
+    "Turn files like file.cpp:14 into opening file.cpp and going to the
  14th line."
     (save-match-data
       (let* ((matched (string-match "^\\(.*\\):\\([0-9]+\\):?$" filename))
@@ -313,9 +321,7 @@
 (use-package help
   :bind (("<f1>" . help)
          (:map help-map
-	       ("F" . describe-face)))
-  :init
-  (temp-buffer-resize-mode))
+	       ("F" . describe-face))))
 
 (use-package ibuffer
   :bind ("C-x C-b" . ibuffer))
@@ -333,15 +339,14 @@
 
 (use-package js
   :custom
-  (js-indent-level 2)
-  :config
-  (add-to-list 'auto-mode-alist
-               `("\\.json\\'" . ,(if (>= emacs-major-version 29)
-                                     js-json-mode
-                                   js-mode))))
+  (js-indent-level 2))
 
 (use-package kmacro
   :bind ("C-x C-k C-k"))
+
+(use-package lisp
+  :custom
+  (delete-pair-blink-delay 0))
 
 (use-package lisp-mode
   :hook ((emacs-lisp-mode lisp-mode)
@@ -361,12 +366,24 @@
   (org-capture-templates
    `(("t" "Add task" entry
       (file+headline ,(tok/org-path "todo.org") "Inbox")
-      "* TODO %?")
+      "* TODO %?" :prepend t)
      ("h" "Add habit" entry
       (file+headline ,(tok/org-path "habits.org") "Habits")
       "* TODO %?
 :PROPERTIES:
 :STYLE: habit
+:END:" :prepend t)
+     ("p" "Add paper to reading list" entry
+      (file+headline ,(tok/org-path "reading-list.org") "Reading List")
+      "* TODO [[%^{URL}][%^{Name}]]
+:PROPERTIES:
+:READING_TYPE: paper
+:END:" :prepend t)
+     ("b" "Add book to reading list" entry
+      (file+headline ,(tok/org-path "reading-list.org") "Reading List")
+      "* TODO %^{Author} - %^{Name}
+:PROPERTIES:
+:READING_TYPE: book
 :END:" :prepend t)))
   (org-fast-tag-selection-single-key 'expert)
   (org-log-into-drawer t)
@@ -380,6 +397,10 @@
     (interactive)
     (find-file (tok/org-path "habits.org")))
 
+  (defun reading-list ()
+    (interactive)
+    (find-file (tok/org-path "reading-list.org")))
+
   (defun org-archive-done-tasks ()
     (interactive)
     (org-map-entries
@@ -389,7 +410,7 @@
      "/DONE" 'file)
     (org-save-all-org-buffers))
   :config
-  (add-to-list 'org-modules 'org-habit t))
+  (push 'org-habit org-modules))
 
 (use-package org-agenda
   :bind (("M-C" . jump-to-org-agenda-dashboard)
@@ -400,12 +421,24 @@
       ((agenda "")
        (todo ""
              ((org-agenda-overriding-header "Unscheduled TODO")
-              (org-agenda-skip-function '(org-agenda-skip-entry-if 'scheduled))))
+              (org-agenda-skip-function
+               '(org-agenda-skip-entry-if 'deadline 'scheduled))))
        (agenda ""
-             ((org-agenda-span 'day)
-              (org-agenda-overriding-header "Habit tracker")
+               ((org-agenda-span 'day)
+                (org-agenda-overriding-header "Habit tracker")
+                (org-agenda-files
+                 '(,(tok/org-path "habits.org")))))))
+     ("r" "Reading list"
+      ((tags "READING_TYPE=\"paper\""
+             ((org-agenda-overriding-header "Paper reading list")
+              (org-agenda-prefix-format " %?-12t% s")
               (org-agenda-files
-               '(,(tok/org-path "habits.org")))))))))
+               '(,(tok/org-path "reading-list.org")))))
+       (tags "READING_TYPE=\"book\""
+             ((org-agenda-overriding-header "Book reading list")
+              (org-agenda-prefix-format " %?-12t% s")
+              (org-agenda-files
+               '(,(tok/org-path "reading-list.org")))))))))
   (org-agenda-files `(,(tok/org-path "todo.org")
                       ,(tok/emacs-path "lunar.org")))
   (org-agenda-span 'week)
@@ -459,17 +492,11 @@
   (inhibit-startup-screen t)
   (initial-major-mode 'fundamental-mode))
 
-(use-package time
-  :custom
-  (display-time-24hr-format t)
-  :init
-  (display-time-mode))
-
 (use-package windmove
-  :bind (("M-h" . windmove-left))
+  :bind (("M-h" . windmove-left)
          ("M-l" . windmove-right)
          ("M-j" . windmove-down)
-         ("M-k" . windmove-up))
+         ("M-k" . windmove-up)))
 
 (use-package window
   :bind (("M-o" . window-swap-states)
@@ -493,7 +520,10 @@
          ("<C-M-return>" . toggle-frame-fullscreen)
          ("C-x K" . delete-current-buffer-file)
          ("C-x R" . rename-current-buffer-file)
-         ("C-c M-q" . unfill-paragraph)))
+         ("C-c M-q" . unfill-paragraph)
+         ("M-(" . parens-wrap-round)
+         ("M-s" . splice-sexp)
+         ("<f12>" . toggle-theme)))
 
 (use-package tok-hugo
   :demand t
@@ -502,52 +532,27 @@
   (hugo-project-root "~/infra/")
   (hugo-site-path "topikettunen.com"))
 
-(use-package tok-theme
-  :demand t
-  :load-path "themes/tok-theme/"
-  :preface
-  (defun reload-theme ()
-    (interactive)
-    (disable-theme 'tok)
-    (load-theme 'tok t))
-
-  (defun toggle-theme ()
-    (interactive)
-    (if tok-theme-dark
-        (setenv "TOK_DARK_THEME")
-      (setenv "TOK_DARK_THEME" "1"))
-    (setq tok-theme-dark (if tok-theme-dark nil t))
-    (load-theme 'tok t))
-
-  (defun tok/apply-theme (appearance)
-    "Load theme, taking current system APPEARANCE into consideration."
-    (mapc #'disable-theme custom-enabled-themes)
-    (pcase appearance
-      ('light (progn
-                (setenv "TOK_DARK_THEME")
-                (setq tok-theme-dark nil)))
-      ('dark (progn
-               (setenv "TOK_DARK_THEME" "1")
-               (setq tok-theme-dark t))))
-    (load-theme 'tok t))
-  :bind (("C-<f12>" . reload-theme)
-         ("<f12>" . toggle-theme))
-  :init
-  (add-to-list 'custom-theme-load-path "~/.emacs.d/themes/tok-theme")
-  (add-hook 'ns-system-appearance-change-functions #'tok/apply-theme)
-  (load-theme 'tok t))
-
 ;;; Third-party
 
-(use-package cmake-mode
-  :ensure t)
+(defmacro tok/install-pkg (pkgs)
+  "Some of the third-party packages are just installed without
+giving configurations in them at all. This macro is just a helper
+for installing those."
+  `(progn
+     ,@(cl-loop for pkg in pkgs
+                collect `(use-package ,pkg :ensure t))))
+
+(tok/install-pkg (cmake-mode
+                  dockerfile-mode
+                  jenkinsfile-mode
+                  markdown-mode
+                  nginx-mode
+                  yaml-mode))
 
 (use-package corfu
   :ensure t
-  :hook ((prog-mode sly-mrepl-mode) . corfu-mode))
-
-(use-package dockerfile-mode
-  :ensure t)
+  :init
+  (global-corfu-mode))
 
 (use-package exec-path-from-shell
   :ensure t
@@ -574,17 +579,9 @@
     (add-hook 'before-save-hook 'tok/gofmt-before-save -10 t))
   :hook (go-mode . tok/go-mode-hook))
 
-(use-package jenkinsfile-mode
-  :ensure t)
-
 (use-package magit
-  :ensure t)
-
-(use-package markdown-mode
-  :ensure t)
-
-(use-package nginx-mode
-  :ensure t)
+  :ensure t
+  :hook (magit-mode . turn-on-font-lock))
 
 (use-package multiple-cursors
   :ensure t
@@ -599,25 +596,18 @@
   :ensure t
   :bind (:map paredit-mode-map
               ("M-J"))
-  :hook ((emacs-lisp-mode lisp-mode sly-mrepl-mode)
-         . paredit-mode)
-  :config
-  (advice-add 'paredit-RET
-              :after
-              (lambda ()
-                (when (string-prefix-p "*sly-mrepl for"
-                                       (buffer-name (current-buffer)))
-                  (sly-mrepl-return)))))
+  :hook ((emacs-lisp-mode lisp-mode slime-repl-mode)
+         . paredit-mode))
 
-(use-package sly
+(use-package slime
   :ensure t
-  :bind (:map sly-mode-map
-              ("C-c C-q" . sly-mrepl-sync))
+  :diminish slime-autodoc-mode
   :custom
-  (sly-kill-without-query-p t)
-  (sly-symbol-completion-mode nil)
+  (slime-kill-without-query-p t)
+  (slime-startup-animation nil)
   :init
-  (setq inferior-lisp-program "ros -Q run"))
+  (setq inferior-lisp-program "ros -Q run"
+        slime-contribs '(slime-fancy)))
 
 (use-package terraform-mode
   :ensure t
@@ -634,26 +624,22 @@ module."
              path)))
   :hook ((terraform-mode . terraform-format-on-save-mode)))
 
-(use-package yaml-mode
-  :ensure t)
-
 (use-package vterm
   :ensure t
   :demand t
   :preface
-  (defun tok/vterm (term-no)
-    (let ((buf-name (format "*vterminal<%d>*" term-no)))
+  (defun tok/vterm (&optional arg)
+    (interactive "P")
+    (let ((buf-name (format "*vterminal<%d>*" (if arg arg 1))))
       (unless (get-buffer buf-name)
         (vterm buf-name))
       (switch-to-buffer buf-name)))
   :custom
   (vterm-timer-delay 0.1)
   :hook (vterm-mode . (lambda ()
+                        (font-lock-mode)
                         (setq-local show-trailing-whitespace nil)))
-  ;; I rarely use more than three terminal, add more if necessary.
-  :bind (("C-c 1" . (lambda () (interactive) (tok/vterm 1)))
-         ("C-c 2" . (lambda () (interactive) (tok/vterm 2)))
-         ("C-c 3" . (lambda () (interactive) (tok/vterm 3)))
+  :bind (("C-c t" . tok/vterm)
          (:map vterm-mode-map
                ("C-h" . vterm-send-backspace))))
 

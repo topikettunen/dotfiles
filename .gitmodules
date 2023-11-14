@@ -1,3 +1,0 @@
-[submodule "emacs.d/themes/tok-theme"]
-	path = emacs.d/themes/tok-theme
-	url = git@github.com:topikettunen/tok-theme.git
