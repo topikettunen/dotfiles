@@ -1,0 +1,20 @@
+# Search hidden files and directories.
+--hidden
+
+# Follow symbolic links.
+--follow
+
+# Exclude directories.
+--glob=!{.git,node_modules,Trash,vendor}
+
+# Exclude file types.
+--glob=!*.{lock,lock.hcl}
+
+# Exclude files.
+--glob=!{package-lock.json}
+
+# Searches case insensitively.
+--smart-case
+
+# Sort by file path.
+--sort=path

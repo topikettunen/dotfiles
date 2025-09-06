@@ -1,0 +1,66 @@
+[user]
+	email = topi@topikettunen.com
+	name = Topi Kettunen
+[alias]
+	s = status -sb
+	c = commit
+	cm = commit -m
+        co = checkout
+	d = diff
+	b = branch -v
+	nb = checkout -b
+	conflicts = diff --name-only --diff-filter=U
+	tweaks = !git add . && git commit -m "Tweaks" && git push
+        root = rev-parse --show-toplevel
+
+[column]
+        ui = auto
+
+[branch]
+        sort = -committerdate
+
+[tag]
+        sort = version:refname
+
+[init]
+        defaultBranch = main
+
+[diff]
+        algorithm = histogram
+        colorMoved = plain
+        mnemonicPrefix = true
+        renames = true
+
+[push]
+        default = simple
+        autoSetupRemote = true
+        followTags = true
+
+[fetch]
+        prune = true
+        pruneTags = true
+        all = true
+
+[help]
+        autocorrect = prompt
+
+# [commit]
+#         verbose = true
+
+[rerere]
+        enabled = true
+        autoupdate = true
+
+[core]
+	autocrlf = input
+        excludesfile = ~/.gitignore
+
+[rebase]
+        autoSquash = true
+        autoStash = true
+        updateRefs = true
+
+[init]
+	defaultBranch = main
+[pull]
+	rebase = true
