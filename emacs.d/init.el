@@ -300,17 +300,6 @@
        (mode . erc-mode))
       ("Go"
        (mode . go-mode))
-      ("Gnus"
-       (or
-        (mode . message-mode)
-        (mode . mail-mode)
-        (mode . gnus-group-mode)
-        (mode . gnus-summary-mode)
-        (mode . gnus-article-mode)
-        (name . "^\\.newsrc-dribble")
-        (name . "^\\*\\(sent\\|unsent\\|fetch\\)")
-        (name . "^ \\*\\(nnimap\\|nntp\\|nnmail\\|gnus\\|server\\|mm\\*\\)")
-        (name . "\\(Original Article\\|canonical address\\|extract address\\)")))
       ("Lisp"
        (or
         (mode . emacs-lisp-mode)
