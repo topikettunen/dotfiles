@@ -123,9 +123,6 @@
             (pop-to-buffer it))
         (call-interactively 'compile)))))
 
-(use-package display-line-numbers
-  :hook (prog-mode . display-line-numbers-mode))
-
 (use-package dired
   :bind (:map dired-mode-map
               ;; Don't create new buffers when moving up or down in
