@@ -70,6 +70,9 @@
 
 (use-package cc-mode
   :mode ("\\.h\\(h?\\|xx\\|pp\\)\\'" . c++-mode)
+  :bind (:map c-mode-base-map
+              ("<tab>" . indent-for-tab-command))
+  :hook ((c-mode c++-mode) . eglot-ensure)
   :preface
   (defun llvm-lineup-statement (langelem)
     (let ((in-assign (c-lineup-assignments langelem)))
@@ -120,12 +123,43 @@
             (pop-to-buffer it))
         (call-interactively 'compile)))))
 
+(use-package display-line-numbers
+  :hook (prog-mode . display-line-numbers-mode))
+
 (use-package dired
   :bind (:map dired-mode-map
               ;; Don't create new buffers when moving up or down in
               ;; directories.
               ("RET" . dired-find-alternate-file)
               ("^" . (lambda () (interactive) (find-alternate-file "..")))))
+
+(use-package eglot
+  :commands eglot
+  :bind
+  (:map eglot-mode-map
+        ("C-c C-." . eglot-code-actions))
+  :custom
+  (eglot-autoshutdown t)
+  (eglot-ignored-server-capabilities '(:hoverProvider
+                                       :documentHighlightProvider
+                                       :inlayHintProvider))
+  :config
+  (setq read-process-output-max (* 1024 1024))
+
+  (add-hook 'eglot-managed-mode-hook
+            (lambda ()
+              ;; Show flymake diagnostics first.
+              (setq eldoc-documentation-functions
+                    (cons #'flymake-eldoc-function
+                          (remove #'flymake-eldoc-function
+                                  eldoc-documentation-functions))))))
+
+(use-package eldoc
+  :diminish
+  :hook ((c-mode-common emacs-lisp-mode) . eldoc-mode)
+  :custom
+  (eldoc-echo-area-use-multiline-p 3)
+  (eldoc-echo-area-display-truncation-message nil))
 
 (use-package emacs
   :bind (("C-z"))
@@ -220,6 +254,22 @@
   :config
   (erc-track-minor-mode 1)
   (erc-track-mode 1))
+
+(use-package flymake
+  :bind (:map flymake-mode-map
+              ("M-n" . flymake-goto-next-error)
+              ("M-p" . flymake-goto-prev-error))
+  :custom
+  (flymake-fringe-indicator-position 'left-fringe)
+  (flymake-suppress-zero-counters t)
+  (flymake-start-on-flymake-mode t)
+  (flymake-no-changes-timeout nil)
+  (flymake-start-on-save-buffer t)
+  (flymake-proc-compilation-prevents-syntax-check t)
+  (flymake-wrap-around nil)
+  :custom-face
+  (flymake-note ((t nil)))
+  (flymake-warning ((t (:underline nil)))))
 
 (use-package flyspell
   :custom
@@ -326,6 +376,10 @@
   (add-hook 'ibuffer-mode-hook
             #'(lambda ()
                 (ibuffer-switch-to-saved-filter-groups "default"))))
+
+(use-package hl-line
+  :init
+  (global-hl-line-mode))
 
 (use-package ido
   :custom
@@ -496,7 +550,12 @@
 
   (custom-theme-set-faces
    'tok-colors
-   '(default ((t (:background "black" :foreground "grey85")))))
+   '(default ((t (:background "black" :foreground "gray85"))))
+   '(mode-line ((t (:background "black" :box (:line-width -1 :style released-button)))))
+   '(mode-line-inactive ((t (:background "gray10"))))
+   '(hl-line ((t (:background "gray10"))))
+   '(line-number ((t (:foreground "gray35"))))
+   '(line-number-current-line ((t (:inherit hl-line)))))
   :config
   (enable-theme 'tok-colors))
 
@@ -539,6 +598,28 @@ for installing those."
                   markdown-mode
                   nginx-mode
                   yaml-mode))
+
+(use-package corfu
+  :ensure t
+  :bind (("M-/" . completion-at-point)
+         :map corfu-map
+         ("C-n"      . corfu-next)
+         ("C-p"      . corfu-previous)
+         ("<escape>" . corfu-quit)
+         ("<return>" . corfu-insert)
+         ("M-d"      . corfu-info-documentation)
+         ("M-l"      . corfu-info-location)
+         ("M-."      . corfu-move-to-minibuffer))
+  :custom
+  (tab-always-indent 'complete)
+  (completion-cycle-threshold nil)
+  (corfu-auto nil)
+  (corfu-auto-prefix 2)
+  (corfu-auto-delay 0.25)
+  (corfu-count 14)
+  (corfu-cycle nil)
+  :init
+  (global-corfu-mode))
 
 (use-package exec-path-from-shell
   :ensure t
