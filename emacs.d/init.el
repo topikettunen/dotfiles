@@ -72,7 +72,6 @@
   :mode ("\\.h\\(h?\\|xx\\|pp\\)\\'" . c++-mode)
   :bind (:map c-mode-base-map
               ("<tab>" . indent-for-tab-command))
-  :hook ((c-mode c++-mode) . eglot-ensure)
   :preface
   (defun llvm-lineup-statement (langelem)
     (let ((in-assign (c-lineup-assignments langelem)))
@@ -130,34 +129,6 @@
               ("RET" . dired-find-alternate-file)
               ("^" . (lambda () (interactive) (find-alternate-file "..")))))
 
-(use-package eglot
-  :commands eglot
-  :bind
-  (:map eglot-mode-map
-        ("C-c C-." . eglot-code-actions))
-  :custom
-  (eglot-autoshutdown t)
-  (eglot-ignored-server-capabilities '(:hoverProvider
-                                       :documentHighlightProvider
-                                       :inlayHintProvider))
-  :config
-  (setq read-process-output-max (* 1024 1024))
-
-  (add-hook 'eglot-managed-mode-hook
-            (lambda ()
-              ;; Show flymake diagnostics first.
-              (setq eldoc-documentation-functions
-                    (cons #'flymake-eldoc-function
-                          (remove #'flymake-eldoc-function
-                                  eldoc-documentation-functions))))))
-
-(use-package eldoc
-  :diminish
-  :hook ((c-mode-common emacs-lisp-mode) . eldoc-mode)
-  :custom
-  (eldoc-echo-area-use-multiline-p 3)
-  (eldoc-echo-area-display-truncation-message nil))
-
 (use-package emacs
   :bind (("C-z"))
   :custom
@@ -196,6 +167,8 @@
               ("C-c r" . reset-erc-track-mode))
   :custom
   (erc-autojoin-channels-alist '(("libera.chat"
+                                  "#c"
+                                  "#C++"
                                   "#commonlisp"
                                   "#emacs"
                                   "#freebsd"
@@ -251,22 +224,6 @@
   :config
   (erc-track-minor-mode 1)
   (erc-track-mode 1))
-
-(use-package flymake
-  :bind (:map flymake-mode-map
-              ("M-n" . flymake-goto-next-error)
-              ("M-p" . flymake-goto-prev-error))
-  :custom
-  (flymake-fringe-indicator-position 'left-fringe)
-  (flymake-suppress-zero-counters t)
-  (flymake-start-on-flymake-mode t)
-  (flymake-no-changes-timeout nil)
-  (flymake-start-on-save-buffer t)
-  (flymake-proc-compilation-prevents-syntax-check t)
-  (flymake-wrap-around nil)
-  :custom-face
-  (flymake-note ((t nil)))
-  (flymake-warning ((t (:underline nil)))))
 
 (use-package flyspell
   :custom
@@ -332,10 +289,12 @@
         (mode . term-mode)
         (mode . compilation-mode)
         (mode . vterm-mode)))
-      ("C++"
+      ("C/C++"
        (or
         (mode . c-mode)
         (mode . c++-mode)))
+      ("CMake"
+       (mode . cmake-mode))
       ("Dired"
        (mode . dired-mode))
       ("Emacs"
@@ -365,7 +324,9 @@
         (name . "^ \\*Agenda")
         (mode . org-mode)))
       ("Terraform"
-       (mode . terraform-mode)))))
+       (mode . terraform-mode))
+      ("YAML"
+       (mode . yaml-mode)))))
   (ibuffer-show-empty-filter-groups nil)
   (ibuffer-shrink-to-minimum-size t t)
   (ibuffer-use-other-window t)
@@ -373,10 +334,6 @@
   (add-hook 'ibuffer-mode-hook
             #'(lambda ()
                 (ibuffer-switch-to-saved-filter-groups "default"))))
-
-(use-package hl-line
-  :init
-  (global-hl-line-mode))
 
 (use-package ido
   :custom
@@ -454,7 +411,7 @@
   :init
   (savehist-mode 1))
 
-(use-package sh-mode
+(use-package sh-script
   :custom
   (sh-basic-offset 2))
 
@@ -539,23 +496,6 @@
   :demand t
   :load-path "lisp/")
 
-(use-package tok-colors
-  :no-require t
-  :demand t
-  :init
-  (deftheme tok-colors)
-
-  (custom-theme-set-faces
-   'tok-colors
-   '(default ((t (:background "black" :foreground "gray85"))))
-   '(mode-line ((t (:background "black" :box (:line-width -1 :style released-button)))))
-   '(mode-line-inactive ((t (:background "gray10"))))
-   '(hl-line ((t (:background "gray10"))))
-   '(line-number ((t (:foreground "gray35"))))
-   '(line-number-current-line ((t (:inherit hl-line)))))
-  :config
-  (enable-theme 'tok-colors))
-
 (use-package tok-common
   :demand t
   :load-path "lisp/"
@@ -578,6 +518,20 @@
   :demand t
   :load-path "lisp/")
 
+(use-package tok-theme
+  :demand t
+  :load-path "themes/tok-theme"
+  :preface
+  (defun tok/quickload-theme ()
+    "Just a helper function for quickly reloading theme while playing around with colors."
+    (interactive)
+    (disable-theme 'tok)
+    (load-theme 'tok t))
+  :bind ("<f12>" . tok/quickload-theme)
+  :init
+  (add-to-list 'custom-theme-load-path (tok/emacs-path "themes/tok-theme"))
+  (load-theme 'tok t))
+
 ;;; Third-party
 
 (defmacro tok/install-pkg (pkgs)
@@ -593,30 +547,9 @@ for installing those."
                   jenkinsfile-mode
                   magit
                   markdown-mode
+                  nasm-mode
                   nginx-mode
                   yaml-mode))
-
-(use-package corfu
-  :ensure t
-  :bind (("M-/" . completion-at-point)
-         :map corfu-map
-         ("C-n"      . corfu-next)
-         ("C-p"      . corfu-previous)
-         ("<escape>" . corfu-quit)
-         ("<return>" . corfu-insert)
-         ("M-d"      . corfu-info-documentation)
-         ("M-l"      . corfu-info-location)
-         ("M-."      . corfu-move-to-minibuffer))
-  :custom
-  (tab-always-indent 'complete)
-  (completion-cycle-threshold nil)
-  (corfu-auto nil)
-  (corfu-auto-prefix 2)
-  (corfu-auto-delay 0.25)
-  (corfu-count 14)
-  (corfu-cycle nil)
-  :init
-  (global-corfu-mode))
 
 (use-package exec-path-from-shell
   :ensure t
@@ -661,24 +594,8 @@ for installing those."
   (slime-repl-history-file (tok/user-data "slime-history.eld"))
   (slime-kill-without-query-p t)
   (slime-startup-animation nil)
-  :preface
-  (defun tok/slime-completion-at-point ()
-    "Make SLIME behave nicely with corfu."
-    (let ((slime-current-thread :repl-thread)
-          (package (slime-current-package)))
-      (when-let ((symbol (thing-at-point 'symbol)))
-        (pcase-let ((`(,beg . ,end)
-                     (bounds-of-thing-at-point 'symbol)))
-          (list beg end
-                (car (slime-eval
-                      ;; Or swank:simple-completions
-                      `(swank:fuzzy-completions
-                        ,(substring-no-properties symbol) ',package))))))))
   :init
-  (setq inferior-lisp-program "ros -Q run")
-
-  (advice-add #'slime--completion-at-point
-              :override #'tok/slime-completion-at-point))
+  (setq inferior-lisp-program "ros -Q run"))
 
 (use-package terraform-mode
   :ensure t

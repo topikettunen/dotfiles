@@ -1,5 +1,7 @@
 # ;;-*- mode: sh; -*-
 
+setopt interactivecomments
+
 export PS1="%1~ %# "
 
 export LANG="en_US.UTF-8"
@@ -30,8 +32,8 @@ else # OS X `ls`
   colorflag="-G"
 fi
 
-# export LSCOLORS=ExFxCxDxBxegedabagacad # light colours
-export LSCOLORS=gxfxcxdxbxegedabagacad # dark colours
+export LSCOLORS=ExFxCxDxBxegedabagacad # light colours
+# export LSCOLORS=gxfxcxdxbxegedabagacad # dark colours
 
 alias l="ls -lhF ${colorflag}"
 alias la="ls -lahF ${colorflag}"
